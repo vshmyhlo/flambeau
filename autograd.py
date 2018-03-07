@@ -3,7 +3,7 @@ import numpy as np
 
 class Variable(object):
   def __init__(self, data, requires_grad=False, grad_fn=None):
-    self.data = data
+    self.data = np.array(data)
     self.requires_grad = requires_grad
     self.grad_fn = grad_fn
     self.grad = None
@@ -48,6 +48,10 @@ class Variable(object):
     return view(self, shape)
 
   def backward(self, gradient):
+    gradient = np.array(gradient)
+    assert self.data.shape == gradient.shape, "expected gradient of size {}, got {}".format(
+        self.size(), gradient.shape)
+
     if self.grad_fn is None:
       if self.requires_grad:
         if self.grad is None:
@@ -65,7 +69,7 @@ class Variable(object):
   def dim(self):
     return self.data.ndim
 
-  def __repr__(self):
+  def __str__(self):
     return 'Variable containing:\n{}\n[dtype: {}, size: {}]'.format(
         self.data, self.data.dtype, self.size())
 
