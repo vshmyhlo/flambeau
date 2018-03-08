@@ -9,11 +9,6 @@ class Optimizer(object):
     for param in self.params:
       param.grad = np.zeros(param.size())
 
-      # if param.grad is None:
-      #   param.grad = np.zeros(param.size())
-      # else:
-      #   param.grad.zero_() # TODO:
-
 
 class SGD(Optimizer):
   def __init__(self, params, lr):
