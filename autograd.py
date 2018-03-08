@@ -37,12 +37,12 @@ class Variable(object):
 
   def __matmul__(self, rhs):
     return matmul(self, rhs)
+
   def sum(self, dim=None):
     return sum(self, dim)
 
   def mean(self, dim=None):
     return mean(self, dim)
-
 
   def view(self, shape):
     return view(self, shape)
@@ -81,7 +81,6 @@ def to_var(x):
     return Variable(np.array(x))
 
 
-
 def broadcast_shape_elementwise(a, b):
   if a == b:
     return a, (), ()
@@ -90,13 +89,13 @@ def broadcast_shape_elementwise(a, b):
   elif len(b) == 0:
     return a, (), None,
   elif len(a) == len(b):
-    size , a_sum_dim, b_sum_dim = (), (), ()
+    size, a_sum_dim, b_sum_dim = (), (), ()
 
-    for i, (a, b) in enumerate( zip(a, b)):
+    for i, (a, b) in enumerate(zip(a, b)):
       if a == b:
         size = (*size, a)
       elif a == 1:
-        size , a_sum_dim= (*size, b), (*a_sum_dim, i)
+        size, a_sum_dim = (*size, b), (*a_sum_dim, i)
       elif b == 1:
         size, b_sum_dim = (*size, a), (*b_sum_dim, i)
       else:
@@ -109,7 +108,8 @@ def broadcast_shape_elementwise(a, b):
 
 
 def broadcast_elementwise(lhs, rhs):
-  size, a_sum_dim, b_sum_dim = broadcast_shape_elementwise(lhs.size(), rhs.size())
+  size, a_sum_dim, b_sum_dim = broadcast_shape_elementwise(
+      lhs.size(), rhs.size())
 
   lhs_data = lhs.data * np.ones(size)
   if lhs.requires_grad:
@@ -269,7 +269,8 @@ class MeanBackward(object):
   def __call__(self, gradient):
     if self.dim is not None:
       gradient = np.expand_dims(gradient, self.dim)
-    dx = np.ones_like(self.x.data) / np.array(self.x.data.shape)[self.dim].prod()
+    dx = np.ones_like(self.x.data) / np.array(
+        self.x.data.shape)[self.dim].prod()
     self.x.backward(gradient * dx)
 
 
@@ -312,8 +313,8 @@ class MaxBackward(object):
     self.b = b
 
   def __call__(self, gradient):
-    a.backward(gradient * (a > b))
-    b.backward(gradient * (a <= b))
+    self.a.backward(gradient * (self.a.data > self.b.data))
+    self.b.backward(gradient * (self.a.data <= self.b.data))
 
 
 def relu(x):
@@ -322,7 +323,7 @@ def relu(x):
 
 def matmul(lhs, rhs):
   lhs, rhs = to_var(lhs), to_var(rhs)
-  data = lhs.data.dot(rhs.data)
+  data = lhs.data @ rhs.data
 
   if lhs.requires_grad or rhs.requires_grad:
     return Variable(data, requires_grad=True, grad_fn=MatmulBackward(lhs, rhs))
@@ -331,15 +332,16 @@ def matmul(lhs, rhs):
 
 
 class MatmulBackward(object):
-  def __init__(self, lhs, rhs):
-    self.lhs = lhs
-    self.rhs = rhs
+  def __init__(self, a, b):
+    self.a = a
+    self.b = b
 
   def __call__(self, gradient):
-    fail
-    # print(gradient.shape)
-    # print(self.lhs.size())
-    # print(self.rhs.size())
+    da = gradient @ self.b.data.T
+    db = self.a.data.T @ gradient
+
+    self.a.backward(da)
+    self.b.backward(db)
 
 
 def exp(x):

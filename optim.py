@@ -1,19 +1,24 @@
+import numpy as np
+
+
 class Optimizer(object):
   def __init__(self, params):
     self.params = params
 
   def zero_grad(self):
     for param in self.params:
-      if param.grad is None:
-        param.grad = np.zeros(param.size())
-      else:
-        param.grad.zero_()
+      param.grad = np.zeros(param.size())
+
+      # if param.grad is None:
+      #   param.grad = np.zeros(param.size())
+      # else:
+      #   param.grad.zero_() # TODO:
 
 
 class SGD(Optimizer):
   def __init__(self, params, lr):
     params = list(params)
-    assert len(params) == 0, 'optimizer got an empty parameter list'
+    assert len(params) != 0, 'optimizer got an empty parameter list'
 
     super().__init__(params)
     self.lr = lr
