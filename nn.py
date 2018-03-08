@@ -33,4 +33,4 @@ class Linear(Module):
     self.b = Variable(np.zeros((1, out_features)))
 
   def forward(self, x):
-    return x.matmul(self.w) + self.b
+    return x @ self.w + self.b

@@ -35,14 +35,14 @@ class Variable(object):
   def __rpow__(self, lhs):
     return pow(lhs, self)
 
+  def __matmul__(self, rhs):
+    return matmul(self, rhs)
   def sum(self, dim=None):
     return sum(self, dim)
 
   def mean(self, dim=None):
     return mean(self, dim)
 
-  def matmul(self, rhs):
-    return matmul(self, rhs)
 
   def view(self, shape):
     return view(self, shape)
@@ -81,63 +81,66 @@ def to_var(x):
     return Variable(np.array(x))
 
 
-def broadcast_elementwise(lhs, rhs):
-  size = None
-  if lhs.dim() == 0:
-    size = rhs.size()
-  elif rhs.dim() == 0:
-    size = lhs.size()
-  elif lhs.dim() == rhs.dim():
-    size = ()
 
-    for a, b in zip(lhs.size(), rhs.size()):
+def broadcast_shape_elementwise(a, b):
+  if a == b:
+    return a, (), ()
+  elif len(a) == 0:
+    return b, None, ()
+  elif len(b) == 0:
+    return a, (), None,
+  elif len(a) == len(b):
+    size , a_sum_dim, b_sum_dim = (), (), ()
+
+    for i, (a, b) in enumerate( zip(a, b)):
       if a == b:
         size = (*size, a)
+      elif a == 1:
+        size , a_sum_dim= (*size, b), (*a_sum_dim, i)
+      elif b == 1:
+        size, b_sum_dim = (*size, a), (*b_sum_dim, i)
       else:
-        a, b = sorted((a, b))
+        raise Exception("Can't broadcast {} to {}".format(a, b))
 
-        if a != 1:
-          size = None
-          break
-        else:
-          size = (*size, b)
+    return size, a_sum_dim, b_sum_dim
 
-  if size is None:
-    raise Exception("Can't broadcast {} to {}".format(lhs.size(), rhs.size()))
+  else:
+    raise Exception("Can't broadcast {} to {}".format(a, b))
 
+
+def broadcast_elementwise(lhs, rhs):
+  size, a_sum_dim, b_sum_dim = broadcast_shape_elementwise(lhs.size(), rhs.size())
+
+  lhs_data = lhs.data * np.ones(size)
   if lhs.requires_grad:
     lhs_res = Variable(
-        lhs.data,
+        lhs_data,
         requires_grad=True,
-        grad_fn=BroadcastElementwiseBackward(lhs, size))
+        grad_fn=BroadcastElementwiseBackward(lhs, size, a_sum_dim))
   else:
-    lhs_res = Variable(lhs.data, requires_grad=False)
+    lhs_res = Variable(lhs_data, requires_grad=False)
 
+  rhs_data = rhs.data * np.ones(size)
   if rhs.requires_grad:
     rhs_res = Variable(
-        rhs.data,
+        rhs_data,
         requires_grad=True,
-        grad_fn=BroadcastElementwiseBackward(rhs, size))
+        grad_fn=BroadcastElementwiseBackward(rhs, size, b_sum_dim))
   else:
-    rhs_res = Variable(rhs.data, requires_grad=False)
+    rhs_res = Variable(rhs_data, requires_grad=False)
 
   return lhs_res, rhs_res
 
 
 class BroadcastElementwiseBackward(object):
-  def __init__(self, x, size):
+  def __init__(self, x, size, sum_dim):
     self.x = x
     self.size = size
+    self.sum_dim = sum_dim
 
   def __call__(self, gradient):
-    assert gradient.shape == self.size
-
-    if self.x.size() == gradient.shape:
-      self.x.backward(gradient)
-    elif self.x.dim() == 0:
-      self.x.backward(gradient.sum())
-    else:
-      assert False
+    keepdims = False if self.sum_dim is None else True
+    self.x.backward(gradient.sum(self.sum_dim, keepdims=keepdims))
 
 
 def mul(lhs, rhs):
@@ -242,6 +245,8 @@ class SumBackward(object):
     self.dim = dim
 
   def __call__(self, gradient):
+    if self.dim is not None:
+      gradient = np.expand_dims(gradient, self.dim)
     dx = np.ones_like(self.x.data)
     self.x.backward(gradient * dx)
 
@@ -262,7 +267,9 @@ class MeanBackward(object):
     self.dim = dim
 
   def __call__(self, gradient):
-    dx = np.ones_like(self.x.data) / self.x.data.size
+    if self.dim is not None:
+      gradient = np.expand_dims(gradient, self.dim)
+    dx = np.ones_like(self.x.data) / np.array(self.x.data.shape)[self.dim].prod()
     self.x.backward(gradient * dx)
 
 
@@ -329,7 +336,7 @@ class MatmulBackward(object):
     self.rhs = rhs
 
   def __call__(self, gradient):
-    pass
+    fail
     # print(gradient.shape)
     # print(self.lhs.size())
     # print(self.rhs.size())

@@ -6,20 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import optim
 
-# x = Variable(np.ones((3, 3)), requires_grad=True)
-# x = Variable(np.array(1), requires_grad=True)
-
-# y = (x * 3.0).sum()
-
-# print(y)
-# print(y.grad_fn)
-# print()
-#
-# print(x.grad)
-# y.backward(1.0)
-# print(x.grad)
-# y.backward(1.0)
-# print(x.grad)
 
 
 def cross_entropy(probs, labels):
