@@ -1,60 +1,61 @@
 from collections import OrderedDict
+
 import numpy as np
+
 import autograd
 
 
 class Parameter(autograd.Variable):
-  def __init__(self, data):
-    super().__init__(data, requires_grad=True)
+    def __init__(self, data):
+        super().__init__(data, requires_grad=True)
 
 
 class Module(object):
-  def __init__(self):
-    self.params = OrderedDict()
-    self.modules = OrderedDict()
+    def __init__(self):
+        self.params = OrderedDict()
+        self.modules = OrderedDict()
 
-  def __call__(self, *args, **kwargs):
-    return self.forward(*args, **kwargs)
+    def __call__(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
 
-  def parameters(self):
-    if not hasattr(self, 'params') or not hasattr(self, 'modules'):
-      raise RuntimeError(
-          "Module.__init__() must be called in child constructor")
+    def parameters(self):
+        if not hasattr(self, "params") or not hasattr(self, "modules"):
+            raise RuntimeError("Module.__init__() must be called in child constructor")
 
-    for param in self.params:
-      yield self.params[param]
+        for param in self.params:
+            yield self.params[param]
 
-    for module in self.modules:
-      for param in self.modules[module].parameters():
-        yield param
+        for module in self.modules:
+            for param in self.modules[module].parameters():
+                yield param
 
-  def __getattr__(self, name):
-    if name in self.params:
+    def __getattr__(self, name):
+        if name in self.params:
 
-      return self.params[name]
+            return self.params[name]
 
-    elif name in self.modules:
+        elif name in self.modules:
 
-      return self.modules[name]
+            return self.modules[name]
 
-    else:
-      return super().__getattr__(name)
+        else:
+            return super().__getattr__(name)
 
-  def __setattr__(self, name, value):
-    if isinstance(value, Parameter):
-      self.params[name] = value
-    elif isinstance(value, Module):
-      self.modules[name] = value
-    else:
-      super().__setattr__(name, value)
+    def __setattr__(self, name, value):
+        if isinstance(value, Parameter):
+            self.params[name] = value
+        elif isinstance(value, Module):
+            self.modules[name] = value
+        else:
+            super().__setattr__(name, value)
 
 
 class Linear(Module):
-  def __init__(self, in_features, out_features):
-    super().__init__()
+    def __init__(self, in_features, out_features):
+        super().__init__()
 
-    self.w = Parameter(np.random.standard_normal((in_features, out_features)))
-    self.b = Parameter(np.zeros((1, out_features)))
+        self.w = Parameter(np.random.standard_normal((in_features, out_features)))
+        self.b = Parameter(np.zeros((1, out_features)))
 
-  def forward(self, x):
-    return x @ self.w + self.b
+    def forward(self, x):
+        return x @ self.w + self.b
