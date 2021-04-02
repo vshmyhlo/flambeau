@@ -2,7 +2,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-import autograd
+from flambeau import autograd
 
 
 class Parameter(autograd.Variable):

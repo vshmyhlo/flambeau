@@ -38,34 +38,48 @@ class Variable(object):
     def __matmul__(self, rhs):
         return matmul(self, rhs)
 
-    def sum(self, dim=None):
-        return sum(self, dim)
+    def sum(self, dim=None, keepdim=False):
+        return sum(self, dim=dim, keepdim=keepdim)
 
-    def mean(self, dim=None):
-        return mean(self, dim)
+    def mean(self, dim=None, keepdim=False):
+        return mean(self, dim=dim, keepdim=keepdim)
+
+    def exp(self):
+        return exp(self)
+
+    def log(self):
+        return log(self)
 
     def view(self, shape):
         return view(self, shape)
 
-    def backward(self, gradient):
-        gradient = np.array(gradient)
-        assert self.data.shape == gradient.shape, "expected gradient of size {}, got {}".format(
-            self.size(), gradient.shape
+    def backward(self, grad=None):
+        if grad is None:
+            assert self.data.ndim == 0
+            grad = 1.0
+
+        grad = np.array(grad)
+        assert self.data.shape == grad.shape, "expected gradient of size {}, got {}".format(
+            self.size(), grad.shape
         )
 
         if self.grad_fn is None:
             if self.requires_grad:
                 if self.grad is None:
                     self.grad = np.zeros_like(self.data)
-                self.grad += gradient
+                self.grad += grad
         else:
-            self.grad_fn(gradient)
+            self.grad_fn(grad)
 
     def size(self, dim=None):
         if dim is None:
             return self.data.shape
         else:
             return self.data.shape[dim]
+
+    @property
+    def shape(self):
+        return self.size()
 
     def dim(self):
         return self.data.ndim
@@ -145,9 +159,9 @@ class BroadcastElementwiseBackward(object):
         self.size = size
         self.sum_dim = sum_dim
 
-    def __call__(self, gradient):
+    def __call__(self, grad):
         keepdims = False if self.sum_dim is None else True
-        self.x.backward(gradient.sum(self.sum_dim, keepdims=keepdims))
+        self.x.backward(grad.sum(self.sum_dim, keepdims=keepdims))
 
 
 def mul(lhs, rhs):
@@ -166,9 +180,9 @@ class MulBackward(object):
         self.lhs = lhs
         self.rhs = rhs
 
-    def __call__(self, gradient):
-        self.lhs.backward(gradient * self.rhs.data)
-        self.rhs.backward(gradient * self.lhs.data)
+    def __call__(self, grad):
+        self.lhs.backward(grad * self.rhs.data)
+        self.rhs.backward(grad * self.lhs.data)
 
 
 def add(lhs, rhs):
@@ -187,9 +201,9 @@ class AddBackward(object):
         self.lhs = lhs
         self.rhs = rhs
 
-    def __call__(self, gradient):
-        self.lhs.backward(gradient)
-        self.rhs.backward(gradient)
+    def __call__(self, grad):
+        self.lhs.backward(grad)
+        self.rhs.backward(grad)
 
 
 def div(lhs, rhs):
@@ -208,11 +222,11 @@ class DivBackward(object):
         self.lhs = lhs
         self.rhs = rhs
 
-    def __call__(self, gradient):
+    def __call__(self, grad):
         dlhs = 1 / self.rhs.data
         drhs = -(self.lhs.data / self.rhs.data ** 2)
-        self.lhs.backward(gradient * dlhs)
-        self.rhs.backward(gradient * drhs)
+        self.lhs.backward(grad * dlhs)
+        self.rhs.backward(grad * drhs)
 
 
 def view(x, shape):
@@ -230,54 +244,70 @@ class ViewBackward(object):
         self.x = x
         self.shape = shape
 
-    def __call__(self, gradient):
-        assert gradient.shape == self.shape
+    def __call__(self, grad):
+        assert grad.shape == self.shape
 
-        self.x.backward(gradient.reshape(self.x.size()))
+        self.x.backward(grad.reshape(self.x.size()))
 
 
-def sum(x, dim=None):
+def sum(x, dim=None, keepdim=False):
     x = to_var(x)
-    data = x.data.sum(dim)
+    dim = to_dim(dim, x.data.shape)
+    data = x.data.sum(dim, keepdims=keepdim)
 
     if x.requires_grad:
-        return Variable(data, requires_grad=True, grad_fn=SumBackward(x, dim))
+        return Variable(data, requires_grad=True, grad_fn=SumBackward(x, dim, keepdim))
     else:
         return Variable(data, requires_grad=False, grad_fn=None)
 
 
 class SumBackward(object):
-    def __init__(self, x, dim):
+    def __init__(self, x, dim, keepdim):
         self.x = x
         self.dim = dim
+        self.keepdim = keepdim
 
-    def __call__(self, gradient):
-        if self.dim is not None:
-            gradient = np.expand_dims(gradient, self.dim)
+    def __call__(self, grad):
+        if not self.keepdim:
+            grad = np.expand_dims(grad, self.dim)
         dx = np.ones_like(self.x.data)
-        self.x.backward(gradient * dx)
+        self.x.backward(grad * dx)
 
 
-def mean(x, dim=None):
+def to_dim(x, shape):
+    if x is None:
+        return tuple(range(len(shape)))
+    elif isinstance(x, int):
+        return (x,)
+    else:
+        assert isinstance(x, tuple)
+        return x
+
+
+def mean(x, dim=None, keepdim=False):
     x = to_var(x)
-    data = x.data.mean(dim)
+    dim = to_dim(dim, x.data.shape)
+    data = x.data.mean(dim, keepdims=keepdim)
 
     if x.requires_grad:
-        return Variable(data, requires_grad=True, grad_fn=MeanBackward(x, dim))
+        return Variable(
+            data, requires_grad=True, grad_fn=MeanBackward(x, dim=dim, keepdim=keepdim)
+        )
     else:
         return Variable(data, requires_grad=False, grad_fn=None)
 
 
 class MeanBackward(object):
-    def __init__(self, x, dim):
+    def __init__(self, x, dim, keepdim):
         self.x = x
         self.dim = dim
+        self.keepdim = keepdim
 
-    def __call__(self, gradient):
-        if self.dim is not None:
-            gradient = np.expand_dims(gradient, self.dim)
-        dx = np.ones_like(self.x.data) / np.array(self.x.data.shape)[self.dim].prod()
-        self.x.backward(gradient * dx)
+    def __call__(self, grad):
+        if not self.keepdim:
+            grad = np.expand_dims(grad, self.dim)
+        dx = np.ones_like(self.x.data) / np.product([self.x.data.shape[i] for i in self.dim])
+        self.x.backward(grad * dx)
 
 
 def pow(lhs, rhs):
@@ -296,11 +326,11 @@ class PowBackward(object):
         self.lhs = lhs
         self.rhs = rhs
 
-    def __call__(self, gradient):
+    def __call__(self, grad):
         dlhs = self.rhs.data * self.lhs.data ** (self.rhs.data - 1)
         drhs = self.lhs.data ** self.rhs.data * np.log(self.lhs.data)
-        self.lhs.backward(gradient * dlhs)
-        self.rhs.backward(gradient * drhs)
+        self.lhs.backward(grad * dlhs)
+        self.rhs.backward(grad * drhs)
 
 
 def max(a, b):
@@ -318,9 +348,9 @@ class MaxBackward(object):
         self.a = a
         self.b = b
 
-    def __call__(self, gradient):
-        self.a.backward(gradient * (self.a.data > self.b.data))
-        self.b.backward(gradient * (self.a.data <= self.b.data))
+    def __call__(self, grad):
+        self.a.backward(grad * (self.a.data > self.b.data))
+        self.b.backward(grad * (self.a.data <= self.b.data))
 
 
 def relu(x):
@@ -342,9 +372,9 @@ class MatmulBackward(object):
         self.a = a
         self.b = b
 
-    def __call__(self, gradient):
-        da = gradient @ self.b.data.T
-        db = self.a.data.T @ gradient
+    def __call__(self, grad):
+        da = grad @ self.b.data.T
+        db = self.a.data.T @ grad
 
         self.a.backward(da)
         self.b.backward(db)
@@ -364,9 +394,9 @@ class ExpBackward(object):
     def __init__(self, x):
         self.x = x
 
-    def __call__(self, gradient):
+    def __call__(self, grad):
         dx = np.exp(self.x.data)
-        self.x.backward(gradient * dx)
+        self.x.backward(grad * dx)
 
 
 def neg(x):
@@ -383,9 +413,9 @@ class NegBackward(object):
     def __init__(self, x):
         self.x = x
 
-    def __call__(self, gradient):
+    def __call__(self, grad):
         dx = -1
-        self.x.backward(gradient * dx)
+        self.x.backward(grad * dx)
 
 
 def log(x):
@@ -402,6 +432,6 @@ class LogBackward(object):
     def __init__(self, x):
         self.x = x
 
-    def __call__(self, gradient):
+    def __call__(self, grad):
         dx = 1 / self.x.data
-        self.x.backward(gradient * dx)
+        self.x.backward(grad * dx)

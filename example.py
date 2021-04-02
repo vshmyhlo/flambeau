@@ -1,33 +1,10 @@
-import matplotlib.pyplot as plt
 import numpy as np
 
-import autograd as flam
-import nn
-import optim
-from autograd import Variable, exp, log
-
-
-def one_hot(x, n_classes):
-    embeddings = np.eye(n_classes)
-    x = embeddings[x]
-    return x
-
-
-def cross_entropy(probs, labels):
-    return -(labels * log(probs)).sum(-1)
-
-
-def softmax(logits):
-    exped = exp(logits)
-    size = (*exped.size()[:-1], 1)
-    return exped / exped.sum(-1).view(size)
-
-
-def compute_loss(logits, labels):
-    probs = softmax(logits)
-    cross_ent = cross_entropy(probs=probs, labels=labels)
-    loss = cross_ent.mean()
-    return loss
+import flambeau.nn as nn
+import flambeau.optim as optim
+from flambeau import autograd as flam
+from flambeau.autograd import Variable
+from flambeau.utils import cross_entropy, one_hot, softmax
 
 
 class Model(nn.Module):
@@ -43,46 +20,56 @@ class Model(nn.Module):
         return x
 
 
-model = Model()
-
-
 def shuffle(x, y):
     idx = np.random.permutation(x.shape[0])
     return x[idx], y[idx]
 
 
-m = 1000
-pos_x = np.random.standard_normal((m, 2)) + 1.5
-neg_x = np.random.standard_normal((m, 2)) - 1.5
-pos_y = np.ones((m,), dtype=np.int32)
-neg_y = np.zeros((m,), dtype=np.int32)
-x = np.concatenate([pos_x, neg_x], 0)
-y = np.concatenate([pos_y, neg_y], 0)
-x, y = shuffle(x, y)
+def compute_loss(logits, labels):
+    probs = softmax(logits)
+    loss = cross_entropy(probs=probs, labels=labels)
+    loss = loss.mean()
+    return loss
 
-# plt.scatter(x[:, 0], x[:, 1], s=2, c=y)
-# plt.show()
 
-optimizer = optim.SGD(model.parameters(), lr=0.01)
+def main():
+    m = 1000
+    pos_x = np.random.standard_normal((m, 2)) + 1.5
+    neg_x = np.random.standard_normal((m, 2)) - 1.5
+    pos_y = np.ones((m,), dtype=np.int32)
+    neg_y = np.zeros((m,), dtype=np.int32)
+    x = np.concatenate([pos_x, neg_x], 0)
+    y = np.concatenate([pos_y, neg_y], 0)
+    x, y = shuffle(x, y)
 
-batch_size = 100
-for i in range(x.shape[0] // batch_size):
-    optimizer.zero_grad()
-    batch_i = np.s_[i * batch_size : (i + 1) * batch_size]
-    batch_x, batch_y = x[batch_i], y[batch_i]
-    batch_y = one_hot(batch_y, 2)
-    batch_x, batch_y = Variable(batch_x), Variable(batch_y)
+    # plt.scatter(x[:, 0], x[:, 1], s=2, c=y)
+    # plt.show()
 
-    logits = model(batch_x)
-    loss = compute_loss(logits, labels=batch_y)
+    model = Model()
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
 
-    print(loss.data)
+    batch_size = 100
+    for i in range(x.shape[0] // batch_size):
+        optimizer.zero_grad()
+        batch_i = np.s_[i * batch_size : (i + 1) * batch_size]
+        batch_x, batch_y = x[batch_i], y[batch_i]
+        batch_y = one_hot(batch_y, 2)
+        batch_x, batch_y = Variable(batch_x), Variable(batch_y)
 
-    loss.backward(1.0)
-    optimizer.step()
+        logits = model(batch_x)
+        loss = compute_loss(logits, labels=batch_y)
 
-y_hat = np.argmax(model(Variable(x)).data, -1)
+        print(loss.data)
 
-#
-# plt.scatter(x[:, 0], x[:, 1], s=2, c=y_hat)
-# plt.show()
+        loss.backward(1.0)
+        optimizer.step()
+
+    y_hat = np.argmax(model(Variable(x)).data, -1)
+
+    #
+    # plt.scatter(x[:, 0], x[:, 1], s=2, c=y_hat)
+    # plt.show()
+
+
+if __name__ == "__main__":
+    main()

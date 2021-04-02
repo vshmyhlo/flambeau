@@ -1,9 +1,12 @@
 import numpy as np
+import pytest
+import torch
 
-import autograd
-from autograd import Variable
+from flambeau import autograd
+from flambeau.autograd import Variable
 
 
+# TODO: rename
 def assert_array_eq(a, b):
     assert a is not None
     assert b is not None
@@ -12,7 +15,7 @@ def assert_array_eq(a, b):
     b = np.array(b)
 
     assert a.shape == b.shape
-    assert np.all(a == b)
+    assert np.allclose(a, b)
 
 
 def test_add():
@@ -63,50 +66,6 @@ def test_div():
 
     assert_array_eq(a.grad, [1.0 / 3.0, 0.25])
     assert_array_eq(b.grad, [-1.0 / 9.0, -0.125])
-
-
-def test_sum():
-    x = Variable([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
-    y = x.sum()
-
-    assert y.data == 10.0
-
-    y.backward(1.0)
-
-    assert_array_eq(x.grad, [[1.0, 1.0], [1.0, 1.0]])
-
-
-def test_sum_dim():
-    x = Variable([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], requires_grad=True)
-    y = x.sum(1)
-
-    assert_array_eq(y.data, [3.0, 7.0, 11.0])
-
-    y.backward([1.0, 1.0, 1.0])
-
-    assert_array_eq(x.grad, [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]])
-
-
-def test_mean():
-    x = Variable([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
-    y = x.mean()
-
-    assert y.data == 2.5
-
-    y.backward(1.0)
-
-    assert_array_eq(x.grad, [[0.25, 0.25], [0.25, 0.25]])
-
-
-def test_mean_dim():
-    x = Variable([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], requires_grad=True)
-    y = x.mean(1)
-
-    assert_array_eq(y.data, [1.5, 3.5, 5.5])
-
-    y.backward([1.0, 1.0, 1.0])
-
-    assert_array_eq(x.grad, [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5]])
 
 
 def test_max():
@@ -224,3 +183,36 @@ def test_bradcast_elementwise_vector_vector():
 
     assert_array_eq(a.grad, [[1.0, 1.0], [1.0, 1.0]])
     assert_array_eq(b.grad, [[2.0, 2.0]])
+
+
+m = np.random.standard_normal(size=(2, 3, 4))
+
+
+@pytest.mark.parametrize(
+    "data, op",
+    [
+        # mean
+        (m, lambda x: x.mean()),
+        (m, lambda x: x.mean(1)),
+        (m, lambda x: x.mean(1, keepdim=True)),
+        (m, lambda x: x.mean((0, 2))),
+        (m, lambda x: x.mean((0, 2), keepdim=True)),
+        # # sum
+        (m, lambda x: x.sum()),
+        (m, lambda x: x.sum(1)),
+        (m, lambda x: x.sum(1, keepdim=True)),
+        (m, lambda x: x.sum((0, 2))),
+        (m, lambda x: x.sum((0, 2), keepdim=True)),
+    ],
+)
+def test_unary(data, op):
+    x1 = Variable(data, requires_grad=True)
+    y1 = op(x1)
+    y1.sum().backward()
+
+    x2 = torch.tensor(data, requires_grad=True)
+    y2 = op(x2)
+    y2.sum().backward()
+
+    assert_array_eq(y1.data, y2.detach().numpy())
+    assert_array_eq(x1.grad, x2.grad.numpy())
