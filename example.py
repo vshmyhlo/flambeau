@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 from PIL import Image
 from sklearn.datasets import make_moons
 from tqdm import tqdm
