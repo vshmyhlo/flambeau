@@ -85,9 +85,7 @@ class Variable(object):
         return self.data.ndim
 
     def __str__(self):
-        return "Variable containing:\n{}\n[dtype: {}, size: {}]".format(
-            self.data, self.data.dtype, self.size()
-        )
+        return "{}\n[dtype: {}, size: {}]".format(self.data, self.data.dtype, self.size())
 
 
 def to_var(x):
@@ -353,10 +351,6 @@ class MaxBackward(object):
         self.b.backward(grad * (self.a.data <= self.b.data))
 
 
-def relu(x):
-    return max(0.0, x)
-
-
 def matmul(lhs, rhs):
     lhs, rhs = to_var(lhs), to_var(rhs)
     data = lhs.data @ rhs.data
@@ -426,6 +420,10 @@ def log(x):
         return Variable(data, requires_grad=True, grad_fn=LogBackward(x))
     else:
         return Variable(data, requires_grad=False, grad_fn=None)
+
+
+def relu(x):
+    return max(0.0, x)
 
 
 class LogBackward(object):

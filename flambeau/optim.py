@@ -7,17 +7,26 @@ class Optimizer(object):
 
     def zero_grad(self):
         for param in self.params:
-            param.grad = np.zeros(param.size())
+            param.grad = None
 
 
 class SGD(Optimizer):
-    def __init__(self, params, lr):
+    def __init__(self, params, lr, momentum=None):
         params = list(params)
         assert len(params) != 0, "optimizer got an empty parameter list"
 
         super().__init__(params)
         self.lr = lr
+        self.momentum = momentum
+        self.buffers = [np.zeros_like(p.data) for p in self.params]
 
     def step(self):
-        for param in self.params:
-            param.data -= self.lr * param.grad
+        for param, buffer in zip(self.params, self.buffers):
+            grad = param.grad
+
+            if self.momentum is not None:
+                buffer *= self.momentum
+                buffer += grad
+                grad = buffer
+
+            param.data -= self.lr * grad

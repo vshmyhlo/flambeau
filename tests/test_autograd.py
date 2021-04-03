@@ -1,9 +1,10 @@
 import numpy as np
 import pytest
 import torch
+import torch.nn.functional as F
 
 from flambeau import autograd
-from flambeau.autograd import Variable
+from flambeau.autograd import Variable, relu
 
 
 # TODO: rename
@@ -185,7 +186,7 @@ def test_bradcast_elementwise_vector_vector():
     assert_array_eq(b.grad, [[2.0, 2.0]])
 
 
-m = np.random.standard_normal(size=(2, 3, 4))
+m = np.random.uniform(size=(2, 3, 4))
 
 
 @pytest.mark.parametrize(
@@ -197,12 +198,15 @@ m = np.random.standard_normal(size=(2, 3, 4))
         (m, lambda x: x.mean(1, keepdim=True)),
         (m, lambda x: x.mean((0, 2))),
         (m, lambda x: x.mean((0, 2), keepdim=True)),
-        # # sum
+        # sum
         (m, lambda x: x.sum()),
         (m, lambda x: x.sum(1)),
         (m, lambda x: x.sum(1, keepdim=True)),
         (m, lambda x: x.sum((0, 2))),
         (m, lambda x: x.sum((0, 2), keepdim=True)),
+        # math
+        (m, lambda x: x.exp()),
+        (m, lambda x: x.log()),
     ],
 )
 def test_unary(data, op):
@@ -212,6 +216,23 @@ def test_unary(data, op):
 
     x2 = torch.tensor(data, requires_grad=True)
     y2 = op(x2)
+    y2.sum().backward()
+
+    assert_array_eq(y1.data, y2.detach().numpy())
+    assert_array_eq(x1.grad, x2.grad.numpy())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [np.random.standard_normal(size=(10, 20, 30))],
+)
+def test_relu(data):
+    x1 = Variable(data, requires_grad=True)
+    y1 = relu(x1)
+    y1.sum().backward()
+
+    x2 = torch.tensor(data, requires_grad=True)
+    y2 = F.relu(x2)
     y2.sum().backward()
 
     assert_array_eq(y1.data, y2.detach().numpy())

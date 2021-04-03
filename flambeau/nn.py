@@ -31,13 +31,9 @@ class Module(object):
 
     def __getattr__(self, name):
         if name in self.params:
-
             return self.params[name]
-
         elif name in self.modules:
-
             return self.modules[name]
-
         else:
             return super().__getattr__(name)
 
@@ -54,8 +50,8 @@ class Linear(Module):
     def __init__(self, in_features, out_features):
         super().__init__()
 
-        self.w = Parameter(np.random.standard_normal((in_features, out_features)))
-        self.b = Parameter(np.zeros((1, out_features)))
+        self.weight = Parameter(np.random.standard_normal((in_features, out_features)) * 0.1)
+        self.bias = Parameter(np.zeros((1, out_features)))
 
     def forward(self, x):
-        return x @ self.w + self.b
+        return x @ self.weight + self.bias

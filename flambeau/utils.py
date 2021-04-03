@@ -7,10 +7,10 @@ def one_hot(x, n_classes):
     return x
 
 
-def cross_entropy(probs, labels, dim=-1, eps=1e-7):
-    return -(labels * (probs + eps).log()).sum(dim)
+def cross_entropy(input, target, dim=-1, eps=1e-7):
+    return -(target * (input + eps).log()).sum(dim)
 
 
-def softmax(logits, dim=-1):
-    exp = logits.exp()
+def softmax(input, dim=-1):
+    exp = input.exp()
     return exp / exp.sum(dim, keepdim=True)

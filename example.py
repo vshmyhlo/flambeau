@@ -1,74 +1,99 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import torch
+from PIL import Image
+from sklearn.datasets import make_moons
+from tqdm import tqdm
 
 import flambeau.nn as nn
 import flambeau.optim as optim
-from flambeau import autograd as flam
-from flambeau.autograd import Variable
+from flambeau.autograd import Variable, relu
 from flambeau.utils import cross_entropy, one_hot, softmax
+
+BATCH_SIZE = 256
+NUM_STEPS = 1000
 
 
 class Model(nn.Module):
     def __init__(self):
         super().__init__()
-        self.l1 = nn.Linear(2, 8)
-        self.l2 = nn.Linear(8, 2)
+        self.l1 = nn.Linear(2, 32)
+        self.l2 = nn.Linear(32, 2)
 
-    def forward(self, x):
-        x = self.l1(x)
-        x = flam.relu(x)
-        x = self.l2(x)
-        return x
+    def forward(self, input):
+        input = self.l1(input)
+        input = relu(input)
+        input = self.l2(input)
 
-
-def shuffle(x, y):
-    idx = np.random.permutation(x.shape[0])
-    return x[idx], y[idx]
+        return input
 
 
-def compute_loss(logits, labels):
-    probs = softmax(logits)
-    loss = cross_entropy(probs=probs, labels=labels)
-    loss = loss.mean()
+def compute_loss(input, target):
+    probs = softmax(input)
+    loss = cross_entropy(input=probs, target=target)
     return loss
 
 
 def main():
-    m = 1000
-    pos_x = np.random.standard_normal((m, 2)) + 1.5
-    neg_x = np.random.standard_normal((m, 2)) - 1.5
-    pos_y = np.ones((m,), dtype=np.int32)
-    neg_y = np.zeros((m,), dtype=np.int32)
-    x = np.concatenate([pos_x, neg_x], 0)
-    y = np.concatenate([pos_y, neg_y], 0)
-    x, y = shuffle(x, y)
-
-    # plt.scatter(x[:, 0], x[:, 1], s=2, c=y)
-    # plt.show()
+    x, y = make_moons(10000, noise=0.15)
 
     model = Model()
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    opt = optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+    lr_decay = np.exp(np.log(0.1) / NUM_STEPS)
 
-    batch_size = 100
-    for i in range(x.shape[0] // batch_size):
-        optimizer.zero_grad()
-        batch_i = np.s_[i * batch_size : (i + 1) * batch_size]
+    losses = []
+    lrs = []
+    images = []
+    for i in tqdm(range(NUM_STEPS)):
+        batch_i = np.random.randint(x.shape[0], size=BATCH_SIZE)
         batch_x, batch_y = x[batch_i], y[batch_i]
+
         batch_y = one_hot(batch_y, 2)
         batch_x, batch_y = Variable(batch_x), Variable(batch_y)
 
         logits = model(batch_x)
-        loss = compute_loss(logits, labels=batch_y)
+        loss = compute_loss(input=logits, target=batch_y)
+        losses.append(loss.mean().data)
+        lrs.append(opt.lr)
 
-        print(loss.data)
+        opt.zero_grad()
+        loss.mean().backward()
+        opt.step()
+        opt.lr *= lr_decay
 
-        loss.backward(1.0)
-        optimizer.step()
+        if i % 10 == 0:
+            y_hat = np.argmax(model(Variable(x)).data, -1)
+            fig = plt.figure()
+            plt.scatter(x[:, 0], x[:, 1], s=2, c=y_hat)
+            fig.savefig("./data/fig.png")
+            plt.close(fig)
+            image = Image.open("./data/fig.png")
+            image.load()
+            images.append(image)
 
-    y_hat = np.argmax(model(Variable(x)).data, -1)
+    images[0].save(
+        fp="./data/fig.gif",
+        format="GIF",
+        append_images=images[1:],
+        save_all=True,
+        duration=10,
+        loop=0,
+    )
 
-    #
-    # plt.scatter(x[:, 0], x[:, 1], s=2, c=y_hat)
-    # plt.show()
+    fig = plt.figure()
+    plt.plot(losses)
+    plt.xlabel("step")
+    plt.ylabel("loss")
+    fig.savefig("./data/loss.png")
+    plt.close(fig)
+
+    fig = plt.figure()
+    plt.plot(lrs)
+    plt.xlabel("step")
+    plt.ylabel("lr")
+    plt.yscale("log")
+    fig.savefig("./data/lr.png")
+    plt.close(fig)
 
 
 if __name__ == "__main__":
