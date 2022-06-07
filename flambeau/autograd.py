@@ -59,9 +59,9 @@ class Variable(object):
             grad = 1.0
 
         grad = np.array(grad)
-        assert self.data.shape == grad.shape, "expected gradient of size {}, got {}".format(
-            self.size(), grad.shape
-        )
+        assert (
+            self.data.shape == grad.shape
+        ), "expected gradient of size {}, got {}".format(self.size(), grad.shape)
 
         if self.grad_fn is None:
             if self.requires_grad:
@@ -85,7 +85,9 @@ class Variable(object):
         return self.data.ndim
 
     def __str__(self):
-        return "{}\n[dtype: {}, size: {}]".format(self.data, self.data.dtype, self.size())
+        return "{}\n[dtype: {}, size: {}]".format(
+            self.data, self.data.dtype, self.size()
+        )
 
 
 def to_var(x):
@@ -222,7 +224,7 @@ class DivBackward(object):
 
     def __call__(self, grad):
         dlhs = 1 / self.rhs.data
-        drhs = -(self.lhs.data / self.rhs.data ** 2)
+        drhs = -(self.lhs.data / self.rhs.data**2)
         self.lhs.backward(grad * dlhs)
         self.rhs.backward(grad * drhs)
 
@@ -304,14 +306,16 @@ class MeanBackward(object):
     def __call__(self, grad):
         if not self.keepdim:
             grad = np.expand_dims(grad, self.dim)
-        dx = np.ones_like(self.x.data) / np.product([self.x.data.shape[i] for i in self.dim])
+        dx = np.ones_like(self.x.data) / np.product(
+            [self.x.data.shape[i] for i in self.dim]
+        )
         self.x.backward(grad * dx)
 
 
 def pow(lhs, rhs):
     lhs, rhs = to_var(lhs), to_var(rhs)
     lhs, rhs = broadcast_elementwise(lhs, rhs)
-    data = lhs.data ** rhs.data
+    data = lhs.data**rhs.data
 
     if lhs.requires_grad or rhs.requires_grad:
         return Variable(data, requires_grad=True, grad_fn=PowBackward(lhs, rhs))
@@ -326,7 +330,7 @@ class PowBackward(object):
 
     def __call__(self, grad):
         dlhs = self.rhs.data * self.lhs.data ** (self.rhs.data - 1)
-        drhs = self.lhs.data ** self.rhs.data * np.log(self.lhs.data)
+        drhs = self.lhs.data**self.rhs.data * np.log(self.lhs.data)
         self.lhs.backward(grad * dlhs)
         self.rhs.backward(grad * drhs)
 
